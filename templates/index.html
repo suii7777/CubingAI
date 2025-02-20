@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rubik's Cube Analyzer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 15px;
+            background-color: #f0f0f0;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .scramble-section {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .scramble-text {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 10px;
+            word-wrap: break-word;
+        }
+
+        .explanation-text {
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .video-container {
+            width: 100%;
+            margin-bottom: 15px;
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        #videoElement {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .button-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 5px;
+            font-size: 1em;
+            cursor: pointer;
+            flex: 1;
+            min-width: 120px;
+            transition: background-color 0.3s;
+        }
+
+        #startCameraBtn {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        #startCameraBtn.recording {
+            background-color: #f44336;
+        }
+
+        #recordBtn {
+            background-color: #2196F3;
+            color: white;
+        }
+
+        #recordBtn:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+        #newScrambleBtn {
+            background-color: #FF9800;
+            color: white;
+        }
+
+        .analysis-section {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .solve-time {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #2196F3;
+            margin-bottom: 10px;
+        }
+
+        .suggestions {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .suggestions li {
+            padding: 5px 0;
+            color: #666;
+        }
+
+        @media (max-width: 480px) {
+            .button-container {
+                flex-direction: column;
+            }
+            
+            button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="scramble-section">
+            <div class="scramble-text" id="scrambleText">Loading scramble...</div>
+            <div class="explanation-text" id="explanationText"></div>
+        </div>
+
+        <div class="video-container">
+            <img id="videoElement" src="" alt="Camera feed">
+        </div>
+
+        <div class="button-container">
+            <button id="startCameraBtn">Start Camera</button>
+            <button id="recordBtn" disabled>Start Recording</button>
+            <button id="newScrambleBtn">New Scramble</button>
+        </div>
+
+        <div class="analysis-section" id="analysisSection" style="display: none;">
+            <div class="solve-time" id="solveTime"></div>
+            <ul class="suggestions" id="suggestions"></ul>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let isRecording = false;
+        let isCameraRunning = false;
+
+        // DOM Elements
+        const startCameraBtn = document.getElementById('startCameraBtn');
+        const recordBtn = document.getElementById('recordBtn');
+        const newScrambleBtn = document.getElementById('newScrambleBtn');
+        const videoElement = document.getElementById('videoElement');
+        const scrambleText = document.getElementById('scrambleText');
+        const explanationText = document.getElementById('explanationText');
+        const analysisSection = document.getElementById('analysisSection');
+        const solveTime = document.getElementById('solveTime');
+        const suggestions = document.getElementById('suggestions');
+
+        // Socket.io event handlers
+        socket.on('connect', () => {
+            console.log('Connected to server');
+            getNewScramble();
+        });
+
+        socket.on('camera_status', (data) => {
+            if (data.status === 'started') {
+                isCameraRunning = true;
+                startCameraBtn.textContent = 'Stop Camera';
+                recordBtn.disabled = false;
+                videoElement.src = '/video_feed';
+            } else if (data.status === 'stopped') {
+                isCameraRunning = false;
+                startCameraBtn.textContent = 'Start Camera';
+                recordBtn.disabled = true;
+                videoElement.src = '';
+                if (isRecording) {
+                    stopRecording();
+                }
+            }
+        });
+
+        socket.on('recording_status', (data) => {
+            if (data.status === 'started') {
+                isRecording = true;
+                recordBtn.textContent = 'Stop Recording';
+                analysisSection.style.display = 'none';
+            } else if (data.status === 'stopped') {
+                isRecording = false;
+                recordBtn.textContent = 'Start Recording';
+            }
+        });
+
+        socket.on('scramble', (data) => {
+            scrambleText.textContent = 'Scramble: ' + data.scramble;
+            explanationText.innerHTML = data.explanations.map(
+                (exp, i) => `${i + 1}. ${exp}`
+            ).join('<br>');
+        });
+
+        socket.on('solve_analysis', (data) => {
+            solveTime.textContent = `Solve Time: ${data.solve_time} seconds`;
+            suggestions.innerHTML = data.suggestions.map(
+                suggestion => `<li>${suggestion}</li>`
+            ).join('');
+            analysisSection.style.display = 'block';
+        });
+
+        // Button click handlers
+        startCameraBtn.addEventListener('click', () => {
+            if (!isCameraRunning) {
+                socket.emit('start_camera');
+            } else {
+                socket.emit('stop_camera');
+            }
+        });
+
+        recordBtn.addEventListener('click', () => {
+            if (!isRecording) {
+                socket.emit('start_recording');
+            } else {
+                stopRecording();
+            }
+        });
+
+        newScrambleBtn.addEventListener('click', getNewScramble);
+
+        function stopRecording() {
+            socket.emit('stop_recording');
+        }
+
+        function getNewScramble() {
+            socket.emit('get_scramble');
+        }
+    </script>
+</body>
+</html>
