@@ -193,18 +193,31 @@
                 suggestion => `<li>${suggestion}</li>`
             ).join('');
             analysisSection.style.display = 'block';
-        });
+             // Camera handling
+        let currentFacingMode = 'user'; // 'user' for front camera, 'environment' for back camera
 
-        // Camera handling
         async function startCamera() {
             try {
-                stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { 
-                        facingMode: 'environment',
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                }
+                
+                const constraints = {
+                    video: {
+                        facingMode: { exact: currentFacingMode },
                         width: { ideal: 1280 },
                         height: { ideal: 720 }
-                    } 
-                });
+                    }
+                };
+
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia(constraints);
+                } catch (err) {
+                    // If exact facing mode fails, try without exact
+                    constraints.video.facingMode = currentFacingMode;
+                    stream = await navigator.mediaDevices.getUserMedia(constraints);
+                }
+
                 videoElement.srcObject = stream;
                 isCameraRunning = true;
                 startCameraBtn.textContent = 'Stop Camera';
@@ -228,14 +241,18 @@
             }
         }
 
-        // Button click handlers
-        startCameraBtn.addEventListener('click', () => {
-            if (!isCameraRunning) {
-                startCamera();
-            } else {
-                stopCamera();
+        async function switchCamera(facingMode) {
+            currentFacingMode = facingMode;
+            frontCamBtn.classList.toggle('active', facingMode === 'user');
+            backCamBtn.classList.toggle('active', facingMode === 'environment');
+            
+            if (isCameraRunning) {
+                await startCamera();
             }
-        });
+        }
+
+        
+  
 
         recordBtn.addEventListener('click', () => {
             if (!isRecording) {
