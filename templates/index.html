@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rubik's Cube Analyzer</title>
+    <title>CubingAI - Rubik's Cube Analyzer</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <style>
         body {
@@ -44,12 +44,14 @@
             background: #000;
             border-radius: 10px;
             overflow: hidden;
+            position: relative;
         }
 
         #videoElement {
             width: 100%;
             height: auto;
             display: block;
+            transform: scaleX(-1);
         }
 
         .button-container {
@@ -139,7 +141,7 @@
         </div>
 
         <div class="video-container">
-            <img id="videoElement" src="" alt="Camera feed">
+            <video id="videoElement" autoplay playsinline></video>
         </div>
 
         <div class="button-container">
@@ -158,6 +160,8 @@
         const socket = io();
         let isRecording = false;
         let isCameraRunning = false;
+        let recordingStartTime;
+        let stream;
 
         // DOM Elements
         const startCameraBtn = document.getElementById('startCameraBtn');
@@ -176,34 +180,6 @@
             getNewScramble();
         });
 
-        socket.on('camera_status', (data) => {
-            if (data.status === 'started') {
-                isCameraRunning = true;
-                startCameraBtn.textContent = 'Stop Camera';
-                recordBtn.disabled = false;
-                videoElement.src = '/video_feed';
-            } else if (data.status === 'stopped') {
-                isCameraRunning = false;
-                startCameraBtn.textContent = 'Start Camera';
-                recordBtn.disabled = true;
-                videoElement.src = '';
-                if (isRecording) {
-                    stopRecording();
-                }
-            }
-        });
-
-        socket.on('recording_status', (data) => {
-            if (data.status === 'started') {
-                isRecording = true;
-                recordBtn.textContent = 'Stop Recording';
-                analysisSection.style.display = 'none';
-            } else if (data.status === 'stopped') {
-                isRecording = false;
-                recordBtn.textContent = 'Start Recording';
-            }
-        });
-
         socket.on('scramble', (data) => {
             scrambleText.textContent = 'Scramble: ' + data.scramble;
             explanationText.innerHTML = data.explanations.map(
@@ -219,18 +195,51 @@
             analysisSection.style.display = 'block';
         });
 
+        // Camera handling
+        async function startCamera() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: 'environment',
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    } 
+                });
+                videoElement.srcObject = stream;
+                isCameraRunning = true;
+                startCameraBtn.textContent = 'Stop Camera';
+                recordBtn.disabled = false;
+            } catch (err) {
+                console.error('Error accessing camera:', err);
+                alert('Could not access camera. Please make sure you have granted camera permissions.');
+            }
+        }
+
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                videoElement.srcObject = null;
+            }
+            isCameraRunning = false;
+            startCameraBtn.textContent = 'Start Camera';
+            recordBtn.disabled = true;
+            if (isRecording) {
+                stopRecording();
+            }
+        }
+
         // Button click handlers
         startCameraBtn.addEventListener('click', () => {
             if (!isCameraRunning) {
-                socket.emit('start_camera');
+                startCamera();
             } else {
-                socket.emit('stop_camera');
+                stopCamera();
             }
         });
 
         recordBtn.addEventListener('click', () => {
             if (!isRecording) {
-                socket.emit('start_recording');
+                startRecording();
             } else {
                 stopRecording();
             }
@@ -238,8 +247,20 @@
 
         newScrambleBtn.addEventListener('click', getNewScramble);
 
+        function startRecording() {
+            isRecording = true;
+            recordingStartTime = Date.now();
+            recordBtn.textContent = 'Stop Recording';
+            analysisSection.style.display = 'none';
+        }
+
         function stopRecording() {
-            socket.emit('stop_recording');
+            if (isRecording) {
+                isRecording = false;
+                const solveTime = (Date.now() - recordingStartTime) / 1000;
+                recordBtn.textContent = 'Start Recording';
+                socket.emit('analyze_solve', { solve_time: solveTime });
+            }
         }
 
         function getNewScramble() {
