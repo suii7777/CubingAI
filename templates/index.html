@@ -75,15 +75,33 @@
         #startCameraBtn {
             background-color: #4CAF50;
             color: white;
+            width: 100%;
         }
 
         #startCameraBtn.recording {
             background-color: #f44336;
         }
 
+        .camera-select {
+            display: flex;
+            gap: 5px;
+            width: 100%;
+        }
+
+        .camera-switch-btn {
+            background-color: #9E9E9E;
+            color: white;
+            flex: 1;
+        }
+
+        .camera-switch-btn.active {
+            background-color: #2196F3;
+        }
+
         #recordBtn {
             background-color: #2196F3;
             color: white;
+            width: 100%;
         }
 
         #recordBtn:disabled {
@@ -94,6 +112,7 @@
         #newScrambleBtn {
             background-color: #FF9800;
             color: white;
+            width: 100%;
         }
 
         .analysis-section {
@@ -146,6 +165,10 @@
 
         <div class="button-container">
             <button id="startCameraBtn">Start Camera</button>
+            <div class="camera-select">
+                <button id="frontCamBtn" class="camera-switch-btn active">Front Camera</button>
+                <button id="backCamBtn" class="camera-switch-btn">Back Camera</button>
+            </div>
             <button id="recordBtn" disabled>Start Recording</button>
             <button id="newScrambleBtn">New Scramble</button>
         </div>
@@ -173,6 +196,8 @@
         const analysisSection = document.getElementById('analysisSection');
         const solveTime = document.getElementById('solveTime');
         const suggestions = document.getElementById('suggestions');
+        const frontCamBtn = document.getElementById('frontCamBtn');
+        const backCamBtn = document.getElementById('backCamBtn');
 
         // Socket.io event handlers
         socket.on('connect', () => {
@@ -193,7 +218,9 @@
                 suggestion => `<li>${suggestion}</li>`
             ).join('');
             analysisSection.style.display = 'block';
-             // Camera handling
+        });
+
+        // Camera handling
         let currentFacingMode = 'user'; // 'user' for front camera, 'environment' for back camera
 
         async function startCamera() {
@@ -251,8 +278,14 @@
             }
         }
 
-        
-  
+        // Button click handlers
+        startCameraBtn.addEventListener('click', () => {
+            if (!isCameraRunning) {
+                startCamera();
+            } else {
+                stopCamera();
+            }
+        });
 
         recordBtn.addEventListener('click', () => {
             if (!isRecording) {
@@ -263,6 +296,9 @@
         });
 
         newScrambleBtn.addEventListener('click', getNewScramble);
+
+        frontCamBtn.addEventListener('click', () => switchCamera('user'));
+        backCamBtn.addEventListener('click', () => switchCamera('environment'));
 
         function startRecording() {
             isRecording = true;
